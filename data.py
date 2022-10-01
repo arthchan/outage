@@ -5,19 +5,40 @@
 from flask import Flask, render_template, request
 from werkzeug.utils import secure_filename
 from rdflib import Graph, Namespace
+from datetime import datetime
 import pandas as pd
+import numpy as np
 import os
+import json
+import sys
 
-# Check if required folders exist
-if not os.path.isdir("uploads"):
-    os.makedirs("uploads")
-if not os.path.isdir("data_ttl"):
-    os.makedirs("data_ttl")
+# Get current timestamp
+now = datetime.now()
+dt_string = now.strftime("%d/%m/%Y %H:%M:%S")
+
+# Load configurations
+try:
+    # Open configuration file
+    with open("config.json") as json_file:
+
+        # Load data in configuration file
+        config = json.load(json_file)
+
+except BaseException as e:
+    # Print error message on console
+    print('[' + dt_string + "] Unable to load the configuration file: ",
+          str(e))
+    sys.exit()
 
 # Initialise fixed attributes
-UPLOAD_FOLDER = os.getcwd() + '/uploads'
-DATA_FOLDER = os.getcwd() + '/data_ttl'
+DATA_FOLDER_PREFIX = "C:/Users/" + os.getlogin()
+DATA_FOLDER = DATA_FOLDER_PREFIX + config["data_folder_path"]
 ALLOWED_EXTENSIONS = {"xlsx"}
+
+# Check if data folder exist
+if not os.path.isdir(DATA_FOLDER):
+    print('[' + dt_string + "] Unable to find the ttl data folder!")
+    sys.exit()
 
 # Initialise dictionary
 type_dict = {
@@ -45,30 +66,26 @@ type_dict = {
 # Function for file extension verification in file upload
 def allowed_file(filename):
     """Verify file extension in file upload."""
-    return '.' in filename and filename.rsplit(
-        '.', 1)[1].lower() in ALLOWED_EXTENSIONS
+    return '.' in filename and filename.rsplit('.', 1)[1].lower(
+        ) in ALLOWED_EXTENSIONS
 
 
 # Other initialisations
 app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 
 # Upload
 @app.route("/", methods=["GET", "POST"])
 def upload():
-    """Upload Excel data file and transform to .ttl file."""
+    """Upload Excel data file and convert to .ttl file."""
     if request.method == "POST":
         file = request.files["file"]
 
         if file.filename != '' and file and allowed_file(file.filename):
             filename = secure_filename(file.filename)
 
-            # Save Excel file in the "uploads" folder
-            file.save(os.path.join(app.config["UPLOAD_FOLDER"], filename))
-
             # Read Excel data and form dataframe
-            df = pd.read_excel("uploads/" + filename, sheet_name="INPUT")
+            df = pd.read_excel(file, sheet_name="FORM")
 
             # Drop all rows with NaN in dataframe
             df.dropna(axis=0, how="all", inplace=True)
@@ -76,20 +93,22 @@ def upload():
             # Reset dataframe index
             df.reset_index(drop=True, inplace=True)
 
+            # Replace blank with "BLANK"
+            df.replace(np.nan, "BLANK", inplace=True)
+
             # Convert all data to string type
             df = df.astype(str)
 
             # Create an array to store all subject code
-            loc = []
             input_asset = []
             error = False
 
             # Graph initialisations
             g = Graph()
-            LNK = Namespace("http://corp.mtrc.com/imd/pd/lnk%")
-            HVS = Namespace("http://corp.mtrc.com/imd/pd/hvs%")
-            OHL = Namespace("http://corp.mtrc.com/imd/pd/ohl%")
-            LOC = Namespace("http://corp.mtrc.com/imd/pd/loc%")
+            LNK = Namespace(config["LNK_URI"])
+            HVS = Namespace(config["HVS_URI"])
+            OHL = Namespace(config["OHL_URI"])
+            LOC = Namespace(config["LOC_URI"])
             g.bind("lnk", LNK)
             g.bind("hvs", HVS)
             g.bind("ohl", OHL)
@@ -98,50 +117,63 @@ def upload():
             # Loop through all rows in dataframe
             for index, row in df.iterrows():
 
-                # Check location
-                if row[0].upper() not in loc:
-                    loc.append(row[0].upper())
-                    if len(loc) >= 2:
-                        error_message = "Inconsistency in location! " \
-                                        "Please check row " + str(index) + '!'
-                        print(error_message)
-                        return render_template("error.html", em=error_message)
+                # Check if there is any blank
+                if row[0] == "BLANK" or row[1] == "BLANK" or \
+                        row[2] == "BLANK" or row[3] == "BLANK":
+                    error_message = "Blank value found! " + \
+                        "Please check row " + str(index) + "! " + str(
+                            row.values)
+                    print(error_message)
+                    return render_template("error.html", em=error_message)
 
                 # HVS
                 if '.' not in row[1]:
+                    try:
+                        # Store unseen HVS subject code to array input_asset
+                        if row[0].upper() + row[1].upper() not in input_asset:
+                            g.set((HVS[row[0].upper() + row[1].upper()],
+                                   LNK["hasLocation"],
+                                   LOC[row[0].upper()]))
+                            input_asset.append(row[0].upper() + row[1].upper())
 
-                    # Store HVS subject code to array input_asset if not exist
-                    if row[0].upper() + row[1].upper() not in input_asset:
-                        g.set((HVS[row[0].upper() + row[1].upper()], LNK[
-                            "hasLocation"], LOC[row[0].upper()]))
-                        input_asset.append(row[0].upper() + row[1].upper())
+                        # HVS hasType
+                        if row[2] == "hasType" and row[3] != "Overhead Line":
+                            g.set((HVS[row[0].upper() + row[1].upper()],
+                                   LNK["hasType"],
+                                   HVS[type_dict[row[3]]]))
 
-                    # HVS hasType
-                    if row[2] == "hasType" and row[3] != "Overhead Line":
-                        g.set((HVS[row[0].upper() + row[1].upper()], LNK[
-                            "hasType"], HVS[type_dict[row[3].upper()]]))
+                        # HVS hasStatus
+                        elif row[2] == "hasStatus":
+                            g.set((HVS[row[0].upper() + row[1].upper()],
+                                   LNK["hasStatus"],
+                                   HVS[row[3].upper()]))
 
-                    # HVS hasStatus
-                    elif row[2] == "hasStatus":
-                        g.set((HVS[row[0].upper() + row[1].upper()], LNK[
-                            "hasStatus"], HVS[row[3].upper()]))
+                        # HVS isConnectedTo
+                        elif row[2] == "isConnectedTo":
 
-                    # HVS isConnectedTo
-                    elif row[2] == "isConnectedTo":
+                            # Check if there is any blank
+                            if row[4] == "BLANK":
+                                error_message = "Blank value found! " + \
+                                    "Please check row " + str(
+                                        index) + "! " + str(row.values)
+                                print(error_message)
+                                return render_template("error.html",
+                                                       em=error_message)
 
-                        # Connected to HVS
-                        if '.' not in row[4]:
-                            g.add((HVS[row[0].upper() + row[1].upper()], LNK[
-                                "isConnectedTo"], HVS[
-                                row[3].upper() + row[4].upper()]))
+                            # Connected to HVS
+                            if '.' not in row[4]:
+                                g.add((HVS[row[0].upper() + row[1].upper()],
+                                       LNK["isConnectedTo"],
+                                       HVS[row[3].upper() + row[4].upper()]))
 
-                        # Connected to OHL
-                        elif '.' in row[4]:
-                            g.add((HVS[row[0].upper() + row[1].upper()], LNK[
-                                "isConnectedTo"], OHL[row[4].upper()]))
+                            # Connected to OHL
+                            elif '.' in row[4]:
+                                g.add((HVS[row[0].upper() + row[1].upper()],
+                                       LNK["isConnectedTo"],
+                                       OHL[row[4].upper()]))
 
                     # Error message
-                    else:
+                    except BaseException:
                         error_message = "Error in processing row " + str(
                             index + 1) + ' in the Excel file!'
                         print(error_message)
@@ -149,46 +181,65 @@ def upload():
 
                 # OHL
                 elif '.' in row[1]:
-                    # Store OHL subject code to array input_asset if not exist
-                    if row[1].upper() not in input_asset:
-                        g.set((OHL[row[1].upper()], LNK["hasLocation"], LOC[
-                            row[0].upper()]))
-                        input_asset.append(row[1].upper())
+                    try:
+                        # Store unseen OHL subject code to array input_asset
+                        if row[1].upper() not in input_asset:
+                            g.set((OHL[row[1].upper()],
+                                   LNK["hasLocation"],
+                                   LOC[row[0].upper()]))
+                            input_asset.append(row[1].upper())
 
-                    # OHL hasType
-                    if row[2] == "hasType" and row[3] == "Overhead Line":
-                        g.set((OHL[row[1].upper()], LNK["hasType"], OHL[
-                            type_dict[row[3].upper()]]))
+                        # OHL hasType
+                        if row[2] == "hasType" and row[3] == "Overhead Line":
+                            g.set((OHL[row[1].upper()],
+                                   LNK["hasType"],
+                                   OHL[type_dict[row[3]]]))
 
-                    # OHL hasStatus
-                    elif row[2] == "hasStatus":
-                        g.set((OHL[row[1].upper()], LNK["hasStatus"], OHL[
-                            row[3].upper()]))
+                        # OHL hasStatus
+                        elif row[2] == "hasStatus":
+                            g.set((OHL[row[1].upper()],
+                                   LNK["hasStatus"],
+                                   OHL[row[3].upper()]))
 
-                    # OHL isConnectedTo
-                    elif row[2] == "isConnectedTo":
+                        # OHL isConnectedTo
+                        elif row[2] == "isConnectedTo":
 
-                        # Connected to HVS
-                        if '.' not in row[4]:
-                            g.add((OHL[row[1].upper()], LNK[
-                                "isConnectedTo"], HVS[
-                                row[3].upper() + row[4].upper()]))
+                            # Check if there is any blank
+                            if row[4] == "BLANK":
+                                error_message = "Blank value found! " + \
+                                    "Please check row " + str(
+                                        index) + "! " + str(row.values)
+                                print(error_message)
+                                return render_template("error.html",
+                                                       em=error_message)
 
-                        # Connected to OHL
-                        elif '.' in row[4]:
-                            g.add((OHL[row[1].upper()], LNK[
-                                "isConnectedTo"], OHL[row[4].upper()]))
+                            # Connected to HVS
+                            if '.' not in row[4]:
+                                g.add((OHL[row[1].upper()],
+                                       LNK["isConnectedTo"],
+                                       HVS[row[3].upper() + row[4].upper()]))
+
+                            # Connected to OHL
+                            elif '.' in row[4]:
+                                g.add((OHL[row[1].upper()],
+                                       LNK["isConnectedTo"],
+                                       OHL[row[4].upper()]))
 
                     # Error message
-                    else:
+                    except BaseException:
                         error_message = "Error in processing row " + str(
-                            index + 1) + ' in the Excel file!'
+                            index + 1) + " in the Excel file!"
                         print(error_message)
                         return render_template("error.html", em=error_message)
+
+                # Neither HVS nor OHL
+                else:
+                    pass
 
             # Graph serialisation
             if not error:
                 try:
+                    # For file with filename containing an underscore
                     if '_' in filename:
                         g.serialize(DATA_FOLDER + '/' + filename.split(
                             '_')[0] + ".ttl", format="turtle")
@@ -196,6 +247,8 @@ def upload():
                             "uploaded.html",
                             f=DATA_FOLDER + '/' + filename.split(
                                 '_')[0] + ".ttl")
+
+                    # For file with filename not containing an underscore
                     else:
                         g.serialize(DATA_FOLDER + '/' + filename.split(
                             '.')[0] + ".ttl", format="turtle")
@@ -208,8 +261,8 @@ def upload():
                     return render_template("error.html", em=error_message)
 
         else:
-            error_message = "Error in uploading the Excel file! " \
-                            "Please check the file again!"
+            error_message = "Error in uploading the Excel file! " + \
+                "Please check the Excel file again!"
             return render_template("error.html", em=error_message)
 
     return render_template("upload.html")
