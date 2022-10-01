@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block meta %}<meta charset="UTF-8" name="viewport" content="width=device-width, initial-scale=1.0">{% endblock %}
+{% block title %}Error{% endblock %}
+{% block style %}
+{{ super () }}
+    <style type="text/css">
+        button {
+            border: none;
+            color: white;
+            padding: 10px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            cursor: pointer;
+            width: 100%;
+        }
+        .button1 {
+            background-color: ForestGreen;
+        }
+        .button1:hover {
+            background-color: DarkGreen;
+        }
+    </style>
+{% endblock %}
+{% block body %}
+    <div style="padding:20px; margin-top:30px; background-color:#ffffff; height:100%; z-index:1; font-family:Verdana, sans-serif;">
+        <h1>Error!</h1>
+        <br>
+        <h2 style="color:red;">{{em}}</h2><br>
+        <form action="/" method="get">
+            <button  id="back" class="button button1" style="font-family:monospace">Back</button>
+        </form>
+    </div>
+{% endblock %}

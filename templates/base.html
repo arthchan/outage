@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>{% block title %}{% endblock %}</title>
+            {% block style %}
+            <style>
+                body {
+                    position: relative;
+                    top: 50px;
+                    margin: 0;
+                    width: 100%;
+                }
+                ul {
+                    list-style-type: none;
+                    margin: 0;
+                    padding: 0;
+                    overflow: hidden;
+                    background-color: #9E9E9E;
+                    position: fixed;
+                    top: 0;
+                    width: 100%;
+                    white-space: nowrap;
+                    height: 50px;
+                    z-index: 10;
+                }
+                li {
+                    float: left;
+                }
+                li a {
+                    display: block;
+                    color: white;
+                    text-align: center;
+                    padding: 14px 0px 14px 0px;
+                    text-decoration: none;
+                    font-family: Verdana, sans-serif;
+                    font-size: 20px;
+                    height: 50px;
+                    width: 167px;
+                }
+                li a:hover:not(.active) {
+                    background-color: #7C7C7C;
+                }
+                .active {
+                    padding: 0;
+                }
+            </style>
+            {% endblock %}
+            {% block script %}{% endblock %}
+    </head>
+    <body>
+        <ul>
+            <li><a class="active" href="/"><img src="{{url_for('static', filename='logo.png')}}"></a></li>
+            <li><a href="/">Upload</a></li>
+        </ul>
+        {% block body %}{% endblock %}
+    </body>
+</html>

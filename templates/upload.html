@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block meta %}<meta charset="UTF-8" name="viewport" content="width=device-width, initial-scale=1.0">{% endblock %}
+{% block title %}Upload{% endblock %}
+{% block style %}
+{{ super () }}
+    <style type="text/css">
+        button {
+            border: none;
+            color: white;
+            padding: 10px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            cursor: pointer;
+            width: 100%;
+        }
+        .button1 {
+            background-color: ForestGreen;
+        }
+        .button1:hover {
+            background-color: DarkGreen;
+        }
+    </style>
+{% endblock %}
+{% block body %}
+    <div style="padding:20px; background-color:#ffffff; height:100%; z-index:1; font-family:Verdana, sans-serif;">
+        <h1>Upload MS Excel File (.xlsx)</h1>
+        <br><br>
+        <form method="post" enctype=multipart/form-data>
+            <input type="file" name="file"><br><br><br>
+            <button id="input" class="button button1" style="font-family:Verdana, sans-serif;">Upload</button>
+        </form>
+    </div>
+{% endblock %}
