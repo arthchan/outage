@@ -3,7 +3,14 @@
 
 # Import libraries
 from rdflib import Graph
+from datetime import datetime
 import os
+import json
+import sys
+
+# Get current timestamp
+now = datetime.now()
+dt_string = now.strftime("%d/%m/%Y %H:%M:%S")
 
 # Initialise lists
 asset = []
@@ -12,27 +19,45 @@ target_list = []
 point_of_isolation = ["33CB", "33PS", "11CB", "3P3CB", "RMUI", "RMUCB",
                       "DCCB", "DCI"]
 
+# Load configurations
+try:
+    # Open configuration file
+    with open("config.json") as json_file:
+
+        # Load data in configuration file
+        config = json.load(json_file)
+
+        # Read variables
+        data_folder_path = "C:/Users/" + os.getlogin(
+            ) + config["data_folder_path"]
+
+except BaseException as e:
+    # Print error message on console
+    print('[' + dt_string + "] Unable to load the configuration file: ",
+          str(e))
+    sys.exit()
+
 # Graph initialisation
 g = Graph()
 
 # Parse all .ttl files into the graph
-for f in os.listdir("data"):
+for f in os.listdir(data_folder_path):
 
     # Quit if there is no .ttl file inside the data directory
     if f == []:
         print("No .ttl file inside the data directory!")
-        quit()
+        sys.exit()
 
-    g.parse("data/" + f, format='turtle')
+    g.parse(data_folder_path + '/' + f, format='turtle')
 
 
 # Function for getting neighbouring asset and its information (type, status)
 def ask_asset_type_status(t):
     """Get neighbouring asset and its information (type, status)."""
     q = f"SELECT ?asset ?type ?status WHERE " \
-        f"{'{'}hvs:{t} gen:isConnectedTo ?asset ." \
-        f"?asset gen:hasType ?type ." \
-        f"?asset gen:hasStatus ?status .{'}'}"
+        f"{'{'}hvs:{t} lnk:isConnectedTo ?asset ." \
+        f"?asset lnk:hasType ?type ." \
+        f"?asset lnk:hasStatus ?status .{'}'}"
 
     a = g.query(q)
 
