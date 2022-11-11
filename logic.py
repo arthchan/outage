@@ -64,7 +64,7 @@ def ask_asset_type_status(t, g):
 
 
 # Function for filtering query results
-def filter_query_results(ans, poi, ast, rch, again=False):
+def filter_query_results(ans, typ, ast, rch, again=False):
     """Filter query results."""
     fql = []
 
@@ -73,13 +73,13 @@ def filter_query_results(ans, poi, ast, rch, again=False):
         if str(a.asset).split('%')[1] in rch:
             continue
 
-        # If asset is not a point of isolation
-        elif str(a.type).split('%')[1] not in poi:
+        # If asset does not match required type
+        elif str(a.type).split('%')[1] not in typ:
             rch.append(str(a.asset).split('%')[1])
             if again:
                 fql.append(str(a.asset).split('%')[1])
 
-        # If asset is unreached before and is a point of isolation
+        # If asset is unreached before and matches required type
         else:
             ast.append(str(a.asset).split('%')[1])
             rch.append(str(a.asset).split('%')[1])
@@ -88,15 +88,22 @@ def filter_query_results(ans, poi, ast, rch, again=False):
 
 
 # Function for running logic
-def run_logic(g, lv, t):
+def run_logic(g, lv, t, type=None, again=True):
     """Run logic."""
     # Initialise lists
     asset = []
     reach = []
     target_list = []
     answer_list = []
+    reach_list = []
     POINT_OF_ISOLATION = [
         "33CB", "33PS", "11CB", "3P3CB", "RMUI", "RMUCB", "DCCB", "DCI"]
+
+    # Set items in POI as search type
+    if type is not None:
+        pass
+    else:
+        type = POINT_OF_ISOLATION
 
     # Append target to target list
     target_list.append(t)
@@ -115,7 +122,7 @@ def run_logic(g, lv, t):
 
             # Filter query results
             asset, reach, ask_again = filter_query_results(
-                answer, POINT_OF_ISOLATION, asset, reach, again=True)
+                answer, type, asset, reach, again)
 
             # If there is asset to be further queried
             while len(ask_again) != 0:
@@ -132,7 +139,7 @@ def run_logic(g, lv, t):
 
                     # Filter query results
                     asset, reach, ask_again_later = filter_query_results(
-                        answer, POINT_OF_ISOLATION, asset, reach, again=True)
+                        answer, type, asset, reach, again)
 
                     # Append items to be further queried to the main list
                     ask_again += ask_again_later
@@ -143,10 +150,13 @@ def run_logic(g, lv, t):
         # Append answers to list
         answer_list.append((i + 1, asset.copy()))
 
+        # Append reached assets to list
+        reach_list.append((i + 1, reach.copy()))
+
         # Clear asset list
         asset.clear()
 
-    return answer_list
+    return answer_list, reach_list
 
 
 # Run logic manually
@@ -175,8 +185,16 @@ if __name__ == "__main__":
     graph = load_configs_and_graphs()
 
     # Run logic
-    ans_list = run_logic(graph, level, target)
+    ans_list, rch_list = run_logic(graph, level, target)
+
+    print("Point(s) of Isolation:")
 
     # Print answers
     for ans in ans_list:
         print("Level " + str(ans[0]) + ": " + str(ans[1]))
+
+    print("\nReached asset(s):")
+
+    # Print reached assets
+    for rch in rch_list:
+        print("Level " + str(rch[0]) + ": " + str(rch[1]))
