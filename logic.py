@@ -8,51 +8,50 @@ import os
 import json
 import sys
 
-# Get current timestamp
-now = datetime.now()
-dt_string = now.strftime("%d/%m/%Y %H:%M:%S")
 
-# Initialise lists
-asset = []
-reach = []
-target_list = []
-point_of_isolation = ["33CB", "33PS", "11CB", "3P3CB", "RMUI", "RMUCB",
-                      "DCCB", "DCI"]
+# Function for loading configurations and graphs
+def load_configs_and_graphs():
+    """Load configurations and graphs."""
+    try:
+        # Open configuration file
+        with open("config.json") as json_file:
 
-# Load configurations
-try:
-    # Open configuration file
-    with open("config.json") as json_file:
+            # Load data in configuration file
+            config = json.load(json_file)
 
-        # Load data in configuration file
-        config = json.load(json_file)
+            # Read variables
+            data_folder_path = "C:/Users/" + os.getlogin() + config[
+                "data_folder_path"]
 
-        # Read variables
-        data_folder_path = "C:/Users/" + os.getlogin(
-            ) + config["data_folder_path"]
+    except BaseException as e:
+        # Get current timestamp
+        now = datetime.now()
+        dt_string = now.strftime("%d/%m/%Y %H:%M:%S")
 
-except BaseException as e:
-    # Print error message on console
-    print('[' + dt_string + "] Unable to load the configuration file: ",
-          str(e))
-    sys.exit()
-
-# Graph initialisation
-g = Graph()
-
-# Parse all .ttl files into the graph
-for f in os.listdir(data_folder_path):
-
-    # Quit if there is no .ttl file inside the data directory
-    if f == []:
-        print("No .ttl file inside the data directory!")
+        # Print error message on console
+        print(
+            '[' + dt_string + "] Unable to load the configuration file: ",
+            str(e))
         sys.exit()
 
-    g.parse(data_folder_path + '/' + f, format='turtle')
+    # Graph initialisation
+    g = Graph()
+
+    # Parse all .ttl files into the graph
+    for f in os.listdir(data_folder_path):
+
+        # Quit if there is no .ttl file inside the data directory
+        if f == []:
+            print("No .ttl file inside the data directory!")
+            sys.exit()
+
+        g.parse(data_folder_path + '/' + f, format='turtle')
+
+    return g
 
 
 # Function for getting neighbouring asset and its information (type, status)
-def ask_asset_type_status(t):
+def ask_asset_type_status(t, g):
     """Get neighbouring asset and its information (type, status)."""
     q = f"SELECT ?asset ?type ?status WHERE " \
         f"{'{'}hvs:{t} lnk:isConnectedTo ?asset ." \
@@ -88,70 +87,96 @@ def filter_query_results(ans, poi, ast, rch, again=False):
     return ast, rch, fql
 
 
-# Input target asset
-target = input("Target = ")
+# Function for running logic
+def run_logic(g, lv, t):
+    """Run logic."""
+    # Initialise lists
+    asset = []
+    reach = []
+    target_list = []
+    answer_list = []
+    POINT_OF_ISOLATION = [
+        "33CB", "33PS", "11CB", "3P3CB", "RMUI", "RMUCB", "DCCB", "DCI"]
 
-# Append target to target list
-target_list.append(target)
+    # Append target to target list
+    target_list.append(t)
 
-# Append target to reached asset list
-reach.append(target)
+    # Append target to reached asset list
+    reach.append(t)
 
-# Input number of level
-try:
-    level = int(input("Level(s) = "))
+    # Iterate through all levels
+    for i in range(lv):
 
-    # Quit if level is not greater than 0
-    if level <= 0:
-        print("Please input an integer greater than 1!")
-        quit()
+        # Iterate through all targets
+        for j in target_list:
 
-# Quit if there any error
-except BaseException:
-    print("Please input an integer greater than 0!")
-    quit()
+            # Get neighbouring asset(s)
+            answer = ask_asset_type_status(j, g)
 
-# Print a blank line
-print("")
+            # Filter query results
+            asset, reach, ask_again = filter_query_results(
+                answer, POINT_OF_ISOLATION, asset, reach, again=True)
 
-# Iterate through all levels
-for i in range(level):
+            # If there is asset to be further queried
+            while len(ask_again) != 0:
 
-    # Iterate through all targets
-    for j in target_list:
+                # Store items to be further queried in a temporary list
+                ask_again_temp = ask_again
+                ask_again = []
 
-        # Get neighbouring asset(s)
-        answer = ask_asset_type_status(j)
+                # Iterate through all items to be further queried
+                for x in ask_again_temp:
 
-        # Filter query results
-        asset, reach, ask_again = filter_query_results(
-            answer, point_of_isolation, asset, reach, again=True)
+                    # Get neighbouring asset(s)
+                    answer = ask_asset_type_status(x, g)
 
-        # If there is asset to be further queried
-        while len(ask_again) != 0:
+                    # Filter query results
+                    asset, reach, ask_again_later = filter_query_results(
+                        answer, POINT_OF_ISOLATION, asset, reach, again=True)
 
-            # Store items to be further queried in a temporary list
-            ask_again_temp = ask_again
-            ask_again = []
+                    # Append items to be further queried to the main list
+                    ask_again += ask_again_later
 
-            # Iterate through all items to be further queried
-            for x in ask_again_temp:
+        # Add items in asset list to target list
+        target_list = asset.copy()
 
-                # Get neighbouring asset(s)
-                answer = ask_asset_type_status(x)
+        # Append answers to list
+        answer_list.append((i + 1, asset.copy()))
 
-                # Filter query results
-                asset, reach, ask_again_later = filter_query_results(
-                    answer, point_of_isolation, asset, reach, again=True)
+        # Clear asset list
+        asset.clear()
 
-                # Append items to be further queried to the main list
-                ask_again += ask_again_later
+    return answer_list
 
-    # Add items in asset list to target list
-    target_list = asset.copy()
 
-    # Print all answers
-    print("Level " + str(i + 1) + ": ", asset)
+# Run logic manually
+if __name__ == "__main__":
+    # Input target asset
+    target = input("Target = ")
 
-    # Clear asset list
-    asset.clear()
+    # Input number of level
+    try:
+        level = int(input("Level(s) = "))
+
+        # Quit if level is not greater than 0
+        if level <= 0:
+            print("Please input an integer greater than 1!")
+            sys.exit()
+
+    # Quit if there any error
+    except BaseException:
+        print("Please input an integer greater than 0!")
+        sys.exit()
+
+    # Print a blank line
+    print("")
+
+    # Load configurations and graphs
+    graph = load_configs_and_graphs()
+
+    # Run logic
+    ans_list = run_logic(graph, level, target)
+
+    # Print answers
+    for ans in ans_list:
+        print("Level " + str(ans[0]) + ": " + str(ans[1]))
