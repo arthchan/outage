@@ -22,6 +22,7 @@ def load_configs_and_graphs():
             # Read variables
             data_folder_path = "C:/Users/" + os.getlogin() + config[
                 "data_folder_path"]
+            POINT_OF_ISOLATION = config["POINT_OF_ISOLATION"]
 
     except BaseException as e:
         # Get current timestamp
@@ -47,7 +48,7 @@ def load_configs_and_graphs():
 
         g.parse(data_folder_path + '/' + f, format='turtle')
 
-    return g
+    return g, POINT_OF_ISOLATION
 
 
 # Function for getting neighbouring asset and its information (type, status)
@@ -96,7 +97,7 @@ def filter_query_results(ans, typ, ast, rch, asd, again=False):
 
 
 # Function for running logic
-def run_logic(g, lv, t, type=None, again=True):
+def run_logic(g, lv, t, type, again=True):
     """Run logic."""
     # Initialise lists
     asset = []
@@ -105,14 +106,6 @@ def run_logic(g, lv, t, type=None, again=True):
     answer_list = []
     reach_list = []
     asset_details = []
-    POINT_OF_ISOLATION = [
-        "33CB", "33PS", "11CB", "3P3CB", "RMUI", "RMUCB", "DCCB", "DCI"]
-
-    # Set items in POI as search type
-    if type is not None:
-        pass
-    else:
-        type = POINT_OF_ISOLATION
 
     # Append target to target list
     target_list.append(t)
@@ -192,10 +185,11 @@ if __name__ == "__main__":
     print("")
 
     # Load configurations and graphs
-    graph = load_configs_and_graphs()
+    graph, POINT_OF_ISOLATION = load_configs_and_graphs()
 
     # Run logic
-    ans_list, rch_list, asd_list = run_logic(graph, level, target)
+    ans_list, rch_list, asd_list = run_logic(
+        graph, level, target, POINT_OF_ISOLATION)
 
     # Print answers
     print("Point(s) of Isolation:")
