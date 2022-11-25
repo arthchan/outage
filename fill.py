@@ -66,7 +66,7 @@ def complete_outage_form(target, form, form_folder_path):
     graph, POINT_OF_ISOLATION = logic.load_configs_and_graphs()
 
     # Open output text file for writing
-    with open("C:/Users/" + os.getlogin() + "/Downloads/OUTPUT.txt", 'w') as f:
+    with open("output.txt", 'w') as f:
 
         # Iterate through all lines
         for ln, line in enumerate(lines):
